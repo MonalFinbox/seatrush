@@ -6,21 +6,21 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config holds all runtime configuration for the app.
+// all the runtime needed
 type Config struct {
-	DatabaseURL string
-	RedisAddr   string
-	JWTSecret   string
-	ServerPort  string
+	DatabaseURL   string
+	RedisAddr     string
+	JWTSecret     string
+	ServerPort    string
+	AdminEmail    string
+	AdminPassword string
+	AdminKey      string // required alongside password to log in as admin
 }
 
-// Load reads .env and returns a populated Config.
 func Load() *Config {
 	viper.SetConfigFile(".env")
 	viper.SetConfigType("env")
 
-	// Also read real environment variables — these win over .env values.
-	// Useful when deploying: set vars in the shell, skip the file entirely.
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -28,9 +28,12 @@ func Load() *Config {
 	}
 
 	return &Config{
-		DatabaseURL: viper.GetString("DATABASE_URL"),
-		RedisAddr:   viper.GetString("REDIS_ADDR"),
-		JWTSecret:   viper.GetString("JWT_SECRET"),
-		ServerPort:  viper.GetString("SERVER_PORT"),
+		DatabaseURL:   viper.GetString("DATABASE_URL"),
+		RedisAddr:     viper.GetString("REDIS_ADDR"),
+		JWTSecret:     viper.GetString("JWT_SECRET"),
+		ServerPort:    viper.GetString("SERVER_PORT"),
+		AdminEmail:    viper.GetString("ADMIN_EMAIL"),
+		AdminPassword: viper.GetString("ADMIN_PASSWORD"),
+		AdminKey:      viper.GetString("ADMIN_KEY"),
 	}
 }
