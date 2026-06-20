@@ -2,7 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+
+	// embed is a blank import — it registers the //go:embed directive.
+	// Without this import the directive is silently ignored.
+	_ "embed"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
@@ -10,6 +15,19 @@ import (
 	"github.com/MonalFinbox/seatrush/internal/config"
 	database "github.com/MonalFinbox/seatrush/internal/db"
 )
+
+// Go reads this file at compile time and stores its bytes in venuesJSON.
+// No file path needed at runtime — the data is baked into the binary.
+//
+//go:embed data/venues.json
+var venuesJSON []byte
+
+type venue struct {
+	Name     string `json:"name"`
+	Address  string `json:"address"`
+	City     string `json:"city"`
+	Capacity int    `json:"capacity"`
+}
 
 func main() {
 	secrets := config.Load()
@@ -32,8 +50,6 @@ func seedAdmin(db *pgxpool.Pool, secrets *config.Config) {
 		log.Fatalf("failed to hash admin password: %v", err)
 	}
 
-	// ON CONFLICT DO NOTHING makes this idempotent:
-	// running the seed twice won't create a duplicate or error out.
 	_, err = db.Exec(context.Background(), `
 		INSERT INTO users (email, password_hash, role, status)
 		VALUES ($1, $2, 'admin', 'active')
@@ -47,17 +63,9 @@ func seedAdmin(db *pgxpool.Pool, secrets *config.Config) {
 }
 
 func seedVenues(db *pgxpool.Pool) {
-	venues := []struct {
-		name     string
-		address  string
-		city     string
-		capacity int
-	}{
-		{"NSCI Dome", "Worli", "Mumbai", 12000},
-		{"Bhavan's College Grounds", "Andheri West", "Mumbai", 8000},
-		{"Jio World Garden", "BKC", "Mumbai", 20000},
-		{"Whistling Woods Auditorium", "Goregaon East", "Mumbai", 1500},
-		{"Nehru Centre", "Worli", "Mumbai", 1000},
+	var venues []venue
+	if err := json.Unmarshal(venuesJSON, &venues); err != nil {
+		log.Fatalf("failed to parse venues.json: %v", err)
 	}
 
 	for _, v := range venues {
@@ -65,9 +73,9 @@ func seedVenues(db *pgxpool.Pool) {
 			INSERT INTO venues (name, address, city, capacity)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT DO NOTHING
-		`, v.name, v.address, v.city, v.capacity)
+		`, v.Name, v.Address, v.City, v.Capacity)
 		if err != nil {
-			log.Fatalf("failed to seed venue %s: %v", v.name, err)
+			log.Fatalf("failed to seed venue %s: %v", v.Name, err)
 		}
 	}
 
