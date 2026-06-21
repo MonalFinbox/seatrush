@@ -2,11 +2,12 @@ package config
 
 import (
 	"log"
+	"time"
 
 	"github.com/spf13/viper"
 )
 
-// all the runtime needed
+// Config holds all runtime configuration for the app.
 type Config struct {
 	DatabaseURL   string
 	RedisAddr     string
@@ -15,13 +16,26 @@ type Config struct {
 	AdminEmail    string
 	AdminPassword string
 	AdminKey      string // required alongside password to log in as admin
+
+	// Token lifetimes
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+
+	// Business knobs
+	PlatformFee float64       // mock organizer registration fee
+	HoldTTL     time.Duration // how long a seat hold survives before auto-release
 }
 
 func Load() *Config {
 	viper.SetConfigFile(".env")
 	viper.SetConfigType("env")
-
 	viper.AutomaticEnv()
+
+	// Defaults so the app boots even if these aren't in .env.
+	viper.SetDefault("ACCESS_TOKEN_TTL_MIN", 15)
+	viper.SetDefault("REFRESH_TOKEN_TTL_HOURS", 168) // 7 days
+	viper.SetDefault("PLATFORM_FEE", 4999.00)
+	viper.SetDefault("HOLD_TTL_SECONDS", 300) // 5 minutes
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("could not load .env file: %v", err)
@@ -35,5 +49,10 @@ func Load() *Config {
 		AdminEmail:    viper.GetString("ADMIN_EMAIL"),
 		AdminPassword: viper.GetString("ADMIN_PASSWORD"),
 		AdminKey:      viper.GetString("ADMIN_KEY"),
+
+		AccessTokenTTL:  time.Duration(viper.GetInt("ACCESS_TOKEN_TTL_MIN")) * time.Minute,
+		RefreshTokenTTL: time.Duration(viper.GetInt("REFRESH_TOKEN_TTL_HOURS")) * time.Hour,
+		PlatformFee:     viper.GetFloat64("PLATFORM_FEE"),
+		HoldTTL:         time.Duration(viper.GetInt("HOLD_TTL_SECONDS")) * time.Second,
 	}
 }
