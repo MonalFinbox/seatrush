@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -24,6 +25,9 @@ type Config struct {
 	// Business knobs
 	PlatformFee float64       // mock organizer registration fee
 	HoldTTL     time.Duration // how long a seat hold survives before auto-release
+
+	// CORS allowed origins for the browser frontend.
+	CORSOrigins []string
 }
 
 func Load() *Config {
@@ -36,6 +40,7 @@ func Load() *Config {
 	viper.SetDefault("REFRESH_TOKEN_TTL_HOURS", 168) // 7 days
 	viper.SetDefault("PLATFORM_FEE", 4999.00)
 	viper.SetDefault("HOLD_TTL_SECONDS", 300) // 5 minutes
+	viper.SetDefault("CORS_ORIGINS", "http://localhost:5173,http://localhost:4173")
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("could not load .env file: %v", err)
@@ -54,5 +59,18 @@ func Load() *Config {
 		RefreshTokenTTL: time.Duration(viper.GetInt("REFRESH_TOKEN_TTL_HOURS")) * time.Hour,
 		PlatformFee:     viper.GetFloat64("PLATFORM_FEE"),
 		HoldTTL:         time.Duration(viper.GetInt("HOLD_TTL_SECONDS")) * time.Second,
+		CORSOrigins:     splitAndTrim(viper.GetString("CORS_ORIGINS")),
 	}
+}
+
+// splitAndTrim turns "a, b ,c" into ["a","b","c"].
+func splitAndTrim(csv string) []string {
+	parts := strings.Split(csv, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

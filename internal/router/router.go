@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
@@ -19,6 +20,16 @@ func New(h *handler.Handler, db *pgxpool.Pool, rdb *redis.Client, cfg *config.Co
 	r := chi.NewRouter()
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
+
+	// CORS so the browser frontend (a different origin) can call the API.
+	// Origins are configurable; defaults cover local Vite dev.
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   cfg.CORSOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 
 	// Operational endpoint, outside the versioned API.
 	r.Get("/health", handler.Health(db, rdb))
