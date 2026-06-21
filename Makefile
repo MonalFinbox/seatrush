@@ -1,45 +1,102 @@
-# SeatRush developer shortcuts.
-# DB URL is read from .env at runtime by the app, but migrations use the CLI,
-# so we repeat it here for the migrate target.
+# ─────────────────────────────────────────────────────────────────────────────
+# SeatRush — Makefile
+# Run `make` or `make help` to list available targets.
+# ─────────────────────────────────────────────────────────────────────────────
 
-DB_URL ?= postgres://seatrush:seatrush@localhost:5433/seatrush?sslmode=disable
-MIGRATIONS := migrations
+# Load variables from .env if present (so DB_URL etc. can be overridden there).
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
 
-.PHONY: up down migrate migrate-down seed run test build tidy
+# ---- Config (override on the command line, e.g. `make migrate DB_URL=...`) ----
+# Prefer DATABASE_URL from .env so migrations hit the same DB as the app.
+DB_URL      ?= $(or $(DATABASE_URL),postgres://seatrush:seatrush@localhost:5433/seatrush?sslmode=disable)
+MIGRATIONS  := migrations
+BIN_DIR     := bin
+VERSION     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS     := -ldflags "-s -w -X main.version=$(VERSION)"
 
-## up: start postgres + redis
-up:
+# Use bash and fail fast on errors in recipe pipelines.
+SHELL := bash
+.DEFAULT_GOAL := help
+
+.PHONY: help up down logs ps migrate migrate-down migrate-create migrate-force \
+        seed run build clean test test-cover race fmt vet tidy verify
+
+# ---- Help ---------------------------------------------------------------------
+
+help: ## Show this help
+	@echo "SeatRush — available targets:"
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| sort \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+# ---- Infrastructure (Docker) --------------------------------------------------
+
+up: ## Start postgres + redis in the background
 	docker compose up -d
 
-## down: stop containers
-down:
+down: ## Stop and remove containers
 	docker compose down
 
-## migrate: apply all up migrations
-migrate:
+logs: ## Tail container logs
+	docker compose logs -f
+
+ps: ## Show container status
+	docker compose ps
+
+# ---- Database migrations ------------------------------------------------------
+
+migrate: ## Apply all up migrations
 	migrate -path $(MIGRATIONS) -database "$(DB_URL)" up
 
-## migrate-down: roll back one migration
-migrate-down:
+migrate-down: ## Roll back the most recent migration
 	migrate -path $(MIGRATIONS) -database "$(DB_URL)" down 1
 
-## seed: insert admin + mock venues (idempotent)
-seed:
+migrate-create: ## Create a new migration pair: make migrate-create name=add_foo
+	@test -n "$(name)" || (echo "usage: make migrate-create name=<name>"; exit 1)
+	migrate create -ext sql -dir $(MIGRATIONS) -seq $(name)
+
+migrate-force: ## Force the schema version (recovery): make migrate-force version=N
+	@test -n "$(version)" || (echo "usage: make migrate-force version=<N>"; exit 1)
+	migrate -path $(MIGRATIONS) -database "$(DB_URL)" force $(version)
+
+seed: ## Insert the admin account + mock venues (idempotent)
 	go run ./cmd/seed
 
-## run: start the API server
-run:
+# ---- Build & run --------------------------------------------------------------
+
+run: ## Run the API server
 	go run ./cmd/api
 
-## test: run unit/integration tests (Redis must be up)
-test:
+build: ## Compile both binaries into ./bin
+	go build $(LDFLAGS) -o $(BIN_DIR)/api  ./cmd/api
+	go build $(LDFLAGS) -o $(BIN_DIR)/seed ./cmd/seed
+
+clean: ## Remove build artifacts
+	rm -rf $(BIN_DIR)
+
+# ---- Quality ------------------------------------------------------------------
+
+test: ## Run all tests (Redis must be up)
 	go test ./... -count=1
 
-## build: compile both binaries into ./bin
-build:
-	go build -o bin/api ./cmd/api
-	go build -o bin/seed ./cmd/seed
+test-cover: ## Run tests with a coverage report (coverage.out + html)
+	go test ./... -count=1 -coverprofile=coverage.out
+	go tool cover -func=coverage.out | tail -1
+	go tool cover -html=coverage.out -o coverage.html
 
-## tidy: sync go.mod
-tidy:
+race: ## Run tests with the race detector
+	go test ./... -race -count=1
+
+fmt: ## Format all Go code
+	go fmt ./...
+
+vet: ## Run go vet
+	go vet ./...
+
+tidy: ## Sync go.mod / go.sum
 	go mod tidy
+
+verify: fmt vet test ## Format, vet, and test in one shot
