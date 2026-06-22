@@ -22,7 +22,7 @@ SHELL := bash
 .DEFAULT_GOAL := help
 
 .PHONY: help up down logs ps migrate migrate-down migrate-create migrate-force \
-        seed run build clean test test-cover race fmt vet tidy verify
+        seed stop run build clean test test-cover race fmt vet tidy verify
 
 # ---- Help ---------------------------------------------------------------------
 
@@ -67,7 +67,11 @@ seed: ## Insert the admin account + mock venues (idempotent)
 
 # ---- Build & run --------------------------------------------------------------
 
-run: ## Run the API server
+stop: ## Kill any process currently holding port 8080
+	@lsof -nP -iTCP:8080 -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {print $$2}' | xargs -r kill && echo "stopped" || echo "nothing on :8080"
+
+run: ## Run the API server (kills any stale process on :8080 first)
+	@$(MAKE) stop
 	go run ./cmd/api
 
 build: ## Compile both binaries into ./bin
