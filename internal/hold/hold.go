@@ -59,9 +59,10 @@ func recordKey(holdID string) string { return "hold:" + holdID }
 
 // createScript atomically verifies every seat is free, then claims them all.
 // Returns "OK" on success, or the id of the first conflicting seat.
-//   KEYS[1] = event zset      KEYS[2] = hold record hash
-//   ARGV[1] = now  ARGV[2] = expiresAt  ARGV[3] = ttl
-//   ARGV[4] = userId  ARGV[5] = eventId  ARGV[6..] = seatIds
+//
+//	KEYS[1] = event zset      KEYS[2] = hold record hash
+//	ARGV[1] = now  ARGV[2] = expiresAt  ARGV[3] = ttl
+//	ARGV[4] = userId  ARGV[5] = eventId  ARGV[6..] = seatIds
 var createScript = redis.NewScript(`
 local now = tonumber(ARGV[1])
 for i = 6, #ARGV do

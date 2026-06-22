@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"log"
 
-	// embed is a blank import — it registers the //go:embed directive.
+	// embed is a blank import, it registers the //go:embed directive.
 	// Without this import the directive is silently ignored.
 	_ "embed"
 
@@ -18,7 +18,7 @@ import (
 
 // Go reads this file at compile time and stores its bytes in venuesJSON.
 // No file path needed at runtime — the data is baked into the binary.
-//
+
 //go:embed data/venues.json
 var venuesJSON []byte
 

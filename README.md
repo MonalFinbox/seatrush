@@ -65,16 +65,16 @@ right.
 
 ## Tech stack
 
-| Concern        | Choice                          | Why |
-|----------------|---------------------------------|-----|
-| Router         | `go-chi/chi`                    | Lightweight, composable middleware |
-| DB driver      | `jackc/pgx` (raw SQL)           | Learn SQL/relational design, no ORM magic |
-| Migrations     | `golang-migrate`                | Versioned, reproducible schema |
-| Config         | `spf13/viper`                   | `.env` + env-var overrides |
-| Auth           | `golang-jwt/jwt` + `bcrypt`     | Stateless access tokens, stateful refresh |
-| Cache / holds  | `redis/go-redis`                | Cache-aside + atomic Lua holds |
-| Realtime       | `gorilla/websocket`             | Per-event broadcast |
-| Tests          | `testing` + `stretchr/testify`  | |
+| Concern       | Choice                         | Why                                       |
+| ------------- | ------------------------------ | ----------------------------------------- |
+| Router        | `go-chi/chi`                   | Lightweight, composable middleware        |
+| DB driver     | `jackc/pgx` (raw SQL)          | Learn SQL/relational design, no ORM magic |
+| Migrations    | `golang-migrate`               | Versioned, reproducible schema            |
+| Config        | `spf13/viper`                  | `.env` + env-var overrides                |
+| Auth          | `golang-jwt/jwt` + `bcrypt`    | Stateless access tokens, stateful refresh |
+| Cache / holds | `redis/go-redis`               | Cache-aside + atomic Lua holds            |
+| Realtime      | `gorilla/websocket`            | Per-event broadcast                       |
+| Tests         | `testing` + `stretchr/testify` |                                           |
 
 Everything runs from **Docker Compose**: `api` (Go), `postgres`, `redis`.
 
@@ -107,6 +107,7 @@ migrations/       golang-migrate .up/.down SQL pairs
 ## Getting started
 
 ### Prerequisites
+
 - Go 1.26+
 - Docker + Docker Compose
 - [`golang-migrate`](https://github.com/golang-migrate/migrate) CLI (`brew install golang-migrate`)
@@ -144,11 +145,11 @@ curl localhost:8080/health
 
 ## Roles & the core flow
 
-| Role        | How they're created | Notes |
-|-------------|---------------------|-------|
-| **Admin**   | **Seeded only** — never via the API | Logs in through a separate secret route guarded by a static `adminAccessKey` |
+| Role          | How they're created                      | Notes                                                                                      |
+| ------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Admin**     | **Seeded only** — never via the API      | Logs in through a separate secret route guarded by a static `adminAccessKey`               |
 | **Organizer** | Self-registers, starts `pending_payment` | Pays a mock platform fee to activate; then claims a venue (admin-approved) and runs events |
-| **Attendee** | Self-registers, active immediately | Browses events, holds seats, books |
+| **Attendee**  | Self-registers, active immediately       | Browses events, holds seats, books                                                         |
 
 The end-to-end journey:
 
@@ -173,71 +174,80 @@ All endpoints are prefixed `/api/v1`. Auth column: public · auth (any logged-in
 user) · role names = that role required.
 
 ### Auth & onboarding
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/auth/register` | public | Register `attendee` (active) or `organizer` (`pending_payment`). Cannot create admins. |
-| POST | `/auth/login` | public | Attendee/organizer login. Pending organizers are blocked. |
-| POST | `/auth/admin/login` | secret | Body `{ email, password, adminAccessKey }`. Seeded admins only. |
-| POST | `/auth/refresh` | refresh token | Rotates the token pair (old refresh token revoked). |
-| POST | `/auth/organizer/activate` | organizer | Body `{ paymentMock }`. Pays mock fee → active. |
-| GET | `/users/me` | auth | Current profile. |
+
+| Method | Path                       | Auth          | Description                                                                            |
+| ------ | -------------------------- | ------------- | -------------------------------------------------------------------------------------- |
+| POST   | `/auth/register`           | public        | Register `attendee` (active) or `organizer` (`pending_payment`). Cannot create admins. |
+| POST   | `/auth/login`              | public        | Attendee/organizer login. Pending organizers are blocked.                              |
+| POST   | `/auth/admin/login`        | secret        | Body `{ email, password, adminAccessKey }`. Seeded admins only.                        |
+| POST   | `/auth/refresh`            | refresh token | Rotates the token pair (old refresh token revoked).                                    |
+| POST   | `/auth/organizer/activate` | organizer     | Body `{ paymentMock }`. Pays mock fee → active.                                        |
+| GET    | `/users/me`                | auth          | Current profile.                                                                       |
 
 ### Venues (read-only; pre-seeded)
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/venues?status=unclaimed` | public | List venues, filterable by claim status. |
-| GET | `/venues/{venueId}` | public | Venue detail. |
+
+| Method | Path                       | Auth   | Description                              |
+| ------ | -------------------------- | ------ | ---------------------------------------- |
+| GET    | `/venues?status=unclaimed` | public | List venues, filterable by claim status. |
+| GET    | `/venues/{venueId}`        | public | Venue detail.                            |
 
 ### Venue registration (claim workflow)
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/venues/{venueId}/registration-requests` | organizer | Body `{ documentMock }`. One pending claim per venue. |
-| GET | `/venues/registration-requests/me` | organizer | Own requests. |
-| GET | `/admin/venue-registration-requests?status=pending` | admin | Review queue. |
-| POST | `/admin/venue-registration-requests/{requestId}/approve` | admin | Venue → claimed, atomically. |
-| POST | `/admin/venue-registration-requests/{requestId}/reject` | admin | Body `{ reason }`. |
+
+| Method | Path                                                     | Auth      | Description                                           |
+| ------ | -------------------------------------------------------- | --------- | ----------------------------------------------------- |
+| POST   | `/venues/{venueId}/registration-requests`                | organizer | Body `{ documentMock }`. One pending claim per venue. |
+| GET    | `/venues/registration-requests/me`                       | organizer | Own requests.                                         |
+| GET    | `/admin/venue-registration-requests?status=pending`      | admin     | Review queue.                                         |
+| POST   | `/admin/venue-registration-requests/{requestId}/approve` | admin     | Venue → claimed, atomically.                          |
+| POST   | `/admin/venue-registration-requests/{requestId}/reject`  | admin     | Body `{ reason }`.                                    |
 
 ### Events
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/events` | organizer (owns venue) | Rejected if venue already has an active event. |
-| GET | `/events?status=published` | public | List events (cache-aside). |
-| GET | `/events/{eventId}` | public | Event detail (cache-aside). |
-| PATCH | `/events/{eventId}` | owner/admin | Update. |
-| POST | `/events/{eventId}/publish` | owner/admin | Make bookable. |
-| POST | `/events/{eventId}/cancel` | owner/admin | Cancel, frees the venue. |
+
+| Method | Path                        | Auth                   | Description                                    |
+| ------ | --------------------------- | ---------------------- | ---------------------------------------------- |
+| POST   | `/events`                   | organizer (owns venue) | Rejected if venue already has an active event. |
+| GET    | `/events?status=published`  | public                 | List events (cache-aside).                     |
+| GET    | `/events/{eventId}`         | public                 | Event detail (cache-aside).                    |
+| PATCH  | `/events/{eventId}`         | owner/admin            | Update.                                        |
+| POST   | `/events/{eventId}/publish` | owner/admin            | Make bookable.                                 |
+| POST   | `/events/{eventId}/cancel`  | owner/admin            | Cancel, frees the venue.                       |
 
 ### Seat map
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/events/{eventId}/seats` | owner | Bulk-define seats (once). |
-| GET | `/events/{eventId}/seats` | public | Full map + live status (`available`/`held`/`booked`). |
+
+| Method | Path                      | Auth   | Description                                           |
+| ------ | ------------------------- | ------ | ----------------------------------------------------- |
+| POST   | `/events/{eventId}/seats` | owner  | Bulk-define seats (once).                             |
+| GET    | `/events/{eventId}/seats` | public | Full map + live status (`available`/`held`/`booked`). |
 
 ### Holds — the concurrency feature
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/events/{eventId}/holds` | attendee | Body `{ seatIds }`. Atomic; returns `{ holdId, seatIds, expiresAt }`. |
-| DELETE | `/holds/{holdId}` | attendee (owner) | Manually release. |
+
+| Method | Path                      | Auth             | Description                                                           |
+| ------ | ------------------------- | ---------------- | --------------------------------------------------------------------- |
+| POST   | `/events/{eventId}/holds` | attendee         | Body `{ seatIds }`. Atomic; returns `{ holdId, seatIds, expiresAt }`. |
+| DELETE | `/holds/{holdId}`         | attendee (owner) | Manually release.                                                     |
 
 ### Bookings
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/bookings` | attendee | Body `{ holdId, paymentMock }`. Hold → permanent booking. |
-| GET | `/bookings` | attendee | Own bookings. |
-| GET | `/bookings/{bookingId}` | owner/admin | Detail. |
-| POST | `/bookings/{bookingId}/cancel` | owner/admin | Cancel, free seats. |
+
+| Method | Path                           | Auth        | Description                                               |
+| ------ | ------------------------------ | ----------- | --------------------------------------------------------- |
+| POST   | `/bookings`                    | attendee    | Body `{ holdId, paymentMock }`. Hold → permanent booking. |
+| GET    | `/bookings`                    | attendee    | Own bookings.                                             |
+| GET    | `/bookings/{bookingId}`        | owner/admin | Detail.                                                   |
+| POST   | `/bookings/{bookingId}/cancel` | owner/admin | Cancel, free seats.                                       |
 
 ### Admin dashboard
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/admin/events` | admin | All events. |
-| GET | `/admin/bookings` | admin | All bookings. |
-| GET | `/admin/users` | admin | All users. |
+
+| Method | Path              | Auth  | Description   |
+| ------ | ----------------- | ----- | ------------- |
+| GET    | `/admin/events`   | admin | All events.   |
+| GET    | `/admin/bookings` | admin | All bookings. |
+| GET    | `/admin/users`    | admin | All users.    |
 
 ### Realtime
-| Protocol | Path | Description |
-|----------|------|-------------|
-| WS | `/ws/v1/events/{eventId}` | Live `seat.held` / `seat.released` / `seat.booked` (each with `seatId` + `timestamp`). |
+
+| Protocol | Path                      | Description                                                                            |
+| -------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| WS       | `/ws/v1/events/{eventId}` | Live `seat.held` / `seat.released` / `seat.booked` (each with `seatId` + `timestamp`). |
 
 ---
 
@@ -302,9 +312,9 @@ makes it idempotent — a seat is never released or announced twice.
 
 Event list and detail reads are **cache-aside** in Redis (30s / 60s TTLs): read
 through on a miss, served from cache on a hit, and **invalidated on any write**
-(create/update/publish/cancel). The seat map is deliberately *not* cached — its
+(create/update/publish/cancel). The seat map is deliberately _not_ cached — its
 status changes every time someone holds a seat, so a cache would fight the
-real-time requirement. Knowing when *not* to cache is part of the point.
+real-time requirement. Knowing when _not_ to cache is part of the point.
 
 ### Auth & security
 
@@ -324,7 +334,7 @@ Eight tables, and migrations enforce the business rules **at the database level*
 as a backstop to application logic:
 
 - **One active event per venue** — partial unique index on `events(venue_id)
-  WHERE status NOT IN ('cancelled','completed')`.
+WHERE status NOT IN ('cancelled','completed')`.
 - **One pending claim per venue** — partial unique index on
   `venue_registration_requests(venue_id) WHERE status = 'pending'`.
 - **No duplicate seats** — unique `(event_id, section, seat_row, number)`.
