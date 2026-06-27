@@ -40,6 +40,7 @@ func main() {
 
 	seedAdmin(db, secrets)
 	seedVenues(db)
+	seedDemoData(db)
 
 	log.Println("Seed complete.")
 }
