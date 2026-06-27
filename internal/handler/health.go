@@ -38,5 +38,5 @@ func statusString(err error) string {
 	if err != nil {
 		return "Down"
 	}
-	return "Up & Running"
+	return "Up and Running"
 }

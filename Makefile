@@ -22,7 +22,8 @@ SHELL := bash
 .DEFAULT_GOAL := help
 
 .PHONY: help up down logs ps migrate migrate-down migrate-create migrate-force \
-        seed stop run build clean test test-cover race fmt vet tidy verify
+        seed stop run build clean test test-cover race fmt vet tidy verify \
+        fe-install fe-dev fe-build fe-preview dev
 
 # ---- Help ---------------------------------------------------------------------
 
@@ -104,3 +105,21 @@ tidy: ## Sync go.mod / go.sum
 	go mod tidy
 
 verify: fmt vet test ## Format, vet, and test in one shot
+
+# ---- Frontend -----------------------------------------------------------------
+
+fe-install: ## Install frontend npm dependencies
+	npm --prefix frontend install
+
+fe-dev: ## Start the frontend dev server (http://localhost:5173)
+	npm --prefix frontend run dev
+
+fe-build: ## Build the frontend for production (output: frontend/dist)
+	npm --prefix frontend run build
+
+fe-preview: ## Preview the production frontend build locally
+	npm --prefix frontend run preview
+
+dev: ## Start API + frontend dev server in parallel (tmux-friendly tip: use two terminals)
+	@echo "→ In terminal 1: make run"
+	@echo "→ In terminal 2: make fe-dev"

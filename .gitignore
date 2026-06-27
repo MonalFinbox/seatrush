@@ -1,10 +1,18 @@
+# Backend
 .env
 *.exe
 /tmp/
-
-# Build artifacts
 /bin/
-
-# Test coverage
 coverage.out
 coverage.html
+/seed
+
+# Frontend
+frontend/.env
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+frontend/.DS_Store
